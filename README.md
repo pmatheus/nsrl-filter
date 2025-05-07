@@ -1,123 +1,93 @@
 # NSRL Filter
 
-A high-performance tool for filtering file lists against the National Software Reference Library (NSRL) database to identify known and unknown software.
+Uma ferramenta de alto desempenho para filtrar listas de arquivos comparando-as com o banco de dados da National Software Reference Library (NSRL), a fim de identificar softwares conhecidos e desconhecidos.
 
-## Overview
+## Visão Geral
 
-NSRL Filter is a Rust-based utility that compares file hash values (SHA-1) from a CSV file against the NSRL database to separate known software from unknown files. This tool is particularly useful for digital forensics and malware analysis workflows.
+O NSRL Filter é um utilitário desenvolvido em Rust que compara valores de hash de arquivos (SHA-1 e MD5) de um arquivo CSV com o banco de dados NSRL para separar softwares conhecidos de arquivos desconhecidos. Esta ferramenta é particularmente útil em fluxos de trabalho de forense digital e análise de malware.
 
-## Features
+## Funcionalidades
 
-- **High Performance**: Uses parallel processing via Rayon for fast SHA-1 lookups
-- **Automatic Indexing**: Creates and uses an indexed version of the database for faster lookups
-- **Progress Visualization**: Real-time progress bars and status updates
-- **Memory Efficient**: Processes large datasets with minimal memory footprint
-- **Flexible Input/Output**: Works with standard CSV file formats
+- **Alto Desempenho**: Utiliza processamento em lote e consultas otimizadas ao banco de dados SQLite para buscas rápidas de hash.
+- **Indexação Automática**: Cria e utiliza índices nas colunas de hash (SHA-1, MD5) do banco de dados para acelerar as consultas.
+- **Visualização de Progresso**: Barras de progresso em tempo real e atualizações de status durante o processamento.
+- **Eficiência de Memória**: Processa grandes conjuntos de dados com um consumo mínimo de memória.
+- **Entrada/Saída Flexível**: Funciona com formatos de arquivo CSV padrão e permite a especificação de caminhos para o banco de dados e a lista de arquivos.
+- **Detecção de Tabela**: Identifica automaticamente as tabelas `METADATA` ou `FILE` dentro do banco de dados NSRL.
+- **Relatórios Detalhados**: Fornece um resumo ao final do processamento, incluindo contagens de arquivos conhecidos, desconhecidos, com hashes vazios e duplicados.
 
-## Installation
+## Instalação
 
-### Prerequisites
+### Pré-requisitos
 
-- Rust and Cargo (latest stable version recommended)
+- Rust e Cargo (versão estável mais recente recomendada)
 
-### Building from Source
+### Compilando a Partir do Código Fonte
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/nsrl-filter.git
-cd nsrl-filter
+# Clone o repositório (substitua pela URL correta, se necessário)
+# git clone https://github.com/pmatheus/nsrl-filter.git
+# cd nsrl-filter
 
-# Build in release mode for optimal performance
+# Compile em modo de release para desempenho otimizado
 cargo build --release
 ```
 
-The compiled binary will be available at `target/release/nsrl-filter`.
+O binário compilado estará disponível em `target/release/nsrl-filter` (ou `target\release\nsrl-filter.exe` no Windows).
 
-## Usage
+## Uso
 
 ```bash
-# Basic usage with default paths
+# Uso básico (assume que 'nsrl.db' e 'filelist.csv' estão no diretório atual)
 nsrl-filter
 
-# Specify custom database and file list paths
-nsrl-filter path/to/nsrl.db path/to/filelist.csv
+# Especificar caminhos personalizados para o banco de dados e a lista de arquivos
+nsrl-filter caminho/para/seu/nsrl.db caminho/para/sua/filelist.csv
 ```
 
-### Input Format
+### Formato do Arquivo de Entrada
 
-The tool expects a CSV file with headers containing at least a SHA1 column. The format should match the standard forensic tool export format with fields like Name, Path, SHA1, etc.
+_IMPORTANTE: O arquivo CSV de entrada deve seguir a ordem das colunas usada pelo RDS da NSRL, especialmente para os hashes. A ferramenta espera que a coluna de hash MD5 esteja no índice 6 (sétima coluna) e a coluna de hash SHA-1 no índice 7 (oitava coluna)._
 
-### Output
+A ferramenta espera um arquivo CSV com cabeçalhos. Se a sua lista de arquivos não segue essa ordem, você precisará ajustá-la.
 
-The tool generates two CSV files in the same directory as the database:
-- `[filename]_known_software.csv`: Files that match entries in the NSRL database
-- `[filename]_unknown_software.csv`: Files that don't match any entry in the NSRL database
+Exemplo de cabeçalhos esperados (a ordem das colunas de hash é crucial):
+`"ProductName","ProductVersion","ApplicationType","OSCode","MfgCode","Language","MD5","SHA-1","FileName","FileSize","SpecialCode"`
 
-## Performance Notes
+### Saída
 
-- The first run will create an indexed copy of the database which may take some time but significantly speeds up subsequent runs
-- Performance is heavily dependent on database size and the number of unique SHA-1 values
-- The parallel processing feature automatically scales to use available CPU cores
+A ferramenta gera dois arquivos CSV no mesmo diretório do arquivo CSV de entrada:
+- `<nome_do_arquivo_de_entrada>_known.csv`: Arquivos que correspondem a entradas no banco de dados NSRL.
+- `<nome_do_arquivo_de_entrada>_unknown.csv`: Arquivos que não correspondem a nenhuma entrada no banco de dados NSRL.
 
-## Database Schema
+## Notas de Desempenho
 
-CREATE TABLE FILE ( 
-sha256     VARCHAR NOT NULL, 
-sha1       VARCHAR NOT NULL, 
-md5        VARCHAR NOT NULL, 
-crc32      
-VARCHAR NOT NULL, 
-file_name  VARCHAR NOT NULL, 
-file_size  INTEGER NOT NULL, 
-package_id INTEGER NOT NULL, 
-CONSTRAINT PK_FILE__FILE PRIMARY KEY (sha256, sha1, md5, file_name, file_size, package_id) 
-); 
-CREATE TABLE MFG ( 
-manufacturer_id INTEGER NOT NULL, 
-name            VARCHAR NOT NULL, 
-CONSTRAINT PK_MFG__MFG_ID PRIMARY KEY (manufacturer_id) 
-); 
-CREATE TABLE OS ( 
-operating_system_id INTEGER NOT NULL, 
-name                VARCHAR NOT NULL,   
-version             
-VARCHAR NOT NULL, 
-manufacturer_id     INTEGER NOT NULL, 
-CONSTRAINT PK_OS__OS_ID PRIMARY KEY (operating_system_id, manufacturer_id) 
-); 
-CREATE TABLE PKG ( 
-package_id          INTEGER NOT NULL, 
-name                VARCHAR NOT NULL, 
-version             VARCHAR NOT NULL, 
-operating_system_id INTEGER NOT NULL, 
-manufacturer_id     INTEGER NOT NULL, 
-language            VARCHAR NOT NULL, 
-application_type    VARCHAR NOT NULL, 
-CONSTRAINT PK_PGK__PKG_ID PRIMARY KEY (package_id, operating_system_id, manufacturer_id, language, 
-application_type) 
-); 
-CREATE TABLE VERSION ( 
-version      VARCHAR UNIQUE NOT NULL, 
-build_set    VARCHAR NOT NULL, 
-build_date   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, 
-release_date TIMESTAMP NOT NULL, 
-description  VARCHAR NOT NULL, 
-CONSTRAINT PK_VERSION__VERSION PRIMARY KEY (version) 
-); 
-CREATE VIEW DISTINCT_HASH AS 
-SELECT DISTINCT 
-sha256, 
-sha1, 
-md5, 
-crc32 
-FROM 
-FILE 
-/* DISTINCT_HASH(sha256,sha1,md5,crc32) */;
+- A primeira execução em um novo banco de dados pode levar algum tempo para criar os índices, o que acelera significativamente as execuções subsequentes.
+- O desempenho depende do tamanho do banco de dados e do número de valores de hash únicos na lista de arquivos de entrada.
 
-## License
+## Esquema do Banco de Dados (Exemplo NSRL)
 
-[MIT License](LICENSE)
+A ferramenta é projetada para funcionar com bancos de dados SQLite derivados do NSRL RDS. Ela procura por tabelas chamadas `METADATA` ou `FILE` que contenham colunas `sha1` e/ou `md5`.
 
-## Contributing
+Um exemplo da estrutura da tabela `FILE` que é compatível:
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```sql
+CREATE TABLE FILE (
+    SHA1 TEXT,
+    MD5 TEXT,
+    -- outras colunas relevantes do NSRL
+    FileName TEXT,
+    FileSize INTEGER
+    -- etc.
+);
+```
+
+A ferramenta também pode usar uma tabela `METADATA` com estrutura similar para `sha1` e `md5`.
+
+## Licença
+
+[Licença MIT](LICENSE) (Se o arquivo LICENSE existir no seu projeto)
+
+## Contribuições
+
+Contribuições são bem-vindas! Sinta-se à vontade para enviar um Pull Request.
